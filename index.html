@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skyster</title>
+<meta name="description" content="Skyster: an unofficial fan game. Drive, wall-ride and fly a Tesla Roadster through real downtown Chicago with Rocket League controls.">
+<meta property="og:title" content="Skyster">
+<meta property="og:description" content="Drive, wall-ride and fly a Tesla Roadster through real downtown Chicago with Rocket League controls. Unofficial fan game.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://kennyhassmusic.github.io/skyster/">
+<meta property="og:image" content="https://kennyhassmusic.github.io/skyster/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=Saira:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed WebGL view; the HUD sits in the corners like an instrument cluster,
+   title and pause cards float left over the live scene. Single dark look by design. */
+:root {
+  --ink: #07080a;
+  --glass: rgba(9, 11, 15, 0.72);
+  --line: rgba(255, 255, 255, 0.14);
+  --paper: #eef1f4;
+  --dim: #98a1ad;
+  --signal: #ff2b2f;
+  --vapor: #9fe6ff;
+  --gold: #c9a466;
+  --ok: #7fe0a0;
+  --display: "Saira Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Saira", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--ink); color: var(--paper); font-family: var(--body); overflow: hidden; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(90deg, rgba(5, 6, 9, 0.9) 0%, rgba(5, 6, 9, 0.6) 46%, rgba(5, 6, 9, 0) 78%);
+  overflow-y: auto;
+}
+.card { width: min(600px, 100%); display: grid; gap: 16px; padding-block: 24px; }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); margin: 0; }
+h1 {
+  margin: 0; font: 800 clamp(60px, 11vw, 124px)/0.82 var(--display); letter-spacing: 0.04em;
+  text-transform: uppercase; text-wrap: balance;
+  background: linear-gradient(180deg, #ffffff 0%, #cfd5dc 60%, #8c949e 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+h1 span { display: block; font-size: 0.32em; letter-spacing: 0.32em; color: var(--signal); -webkit-text-fill-color: var(--signal); margin-top: 0.35em; }
+.lede { margin: 0; color: #c9d0d8; line-height: 1.55; max-width: 62ch; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button {
+  font: 600 15px/1 var(--body); letter-spacing: 0.06em; color: var(--ink); background: var(--paper);
+  border: 0; border-radius: 2px; padding: 14px 22px; cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: progress; }
+button:focus-visible { outline: 2px solid var(--vapor); outline-offset: 3px; }
+button.ghost { background: transparent; color: var(--paper); border: 1px solid var(--line); text-align: left; }
+button.ghost:hover, button.ghost:focus-visible { border-color: var(--vapor); }
+button.ghost[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+.maps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.maps button { display: grid; gap: 6px; padding: 14px 16px; }
+.maps b { font: 700 18px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.maps small { color: var(--dim); font-size: 12px; line-height: 1.4; }
+.status { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.controls { border-top: 1px solid var(--line); padding-top: 14px; overflow-x: auto; }
+.controls table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.controls th { text-align: left; font: 600 11px/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); padding: 0 12px 8px 0; }
+.controls td { padding: 4px 12px 4px 0; color: #d7dde4; vertical-align: top; }
+.controls td:first-child { color: var(--dim); white-space: nowrap; }
+kbd { font: 600 12px/1 var(--body); border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; color: var(--paper); white-space: nowrap; }
+.fine { margin: 0; color: #7d8794; font-size: 12px; line-height: 1.5; }
+
+/* HUD */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+.chips {
+  position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); left: max(18px, env(safe-area-inset-left, 0px));
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.chip {
+  font: 700 13px/1 var(--display); letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 8px 12px; background: var(--glass); border: 1px solid var(--line); border-radius: 2px;
+}
+#surfChip[data-k="wall"], #surfChip[data-k="ramp"] { color: var(--vapor); border-color: rgba(159, 230, 255, 0.5); }
+#surfChip[data-k="air"] { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+#surfChip[data-k="inverted"] { color: var(--gold); border-color: rgba(201, 164, 102, 0.7); }
+#todChip, #sixtyChip { color: var(--dim); }
+#sixtyChip b { color: var(--paper); font-variant-numeric: tabular-nums; }
+#sonic { color: var(--signal); border-color: rgba(255, 43, 47, 0.6); opacity: 0; transition: opacity 0.2s; }
+#sonic.on { opacity: 1; }
+.cluster {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px)); display: grid; justify-items: center; gap: 6px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+#speed { font: 800 76px/0.8 var(--display); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+#speed.sonic { color: #fff; text-shadow: 0 0 22px rgba(255, 60, 60, 0.9); }
+.unit { font: 600 11px/1 var(--body); letter-spacing: 0.3em; color: var(--dim); }
+.bar { width: 200px; height: 4px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.bar div { height: 100%; transform-origin: left center; }
+#boostFill { background: var(--vapor); }
+.bar-label { font: 600 10px/1 var(--body); letter-spacing: 0.24em; color: var(--dim); font-variant-numeric: tabular-nums; display: flex; gap: 10px; align-items: center; }
+.jumps { display: inline-flex; gap: 4px; }
+.jumps i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--dim); display: block; }
+.jumps i.on { background: var(--vapor); border-color: var(--vapor); box-shadow: 0 0 8px var(--vapor); }
+/* cockpit camera: the cabin's own screen and head-up readout stand in for the cluster */
+body.cockpit .cluster, body.cockpit #altBox, body.cockpit #hullLabel, body.cockpit #hull .bar { display: none; }
+/* fuel add-ons on board, and the tank bar in the best fuel's colour */
+.fuelMark { position: absolute; left: 0; top: 0; translate: -50% -50%; display: grid; justify-items: center; gap: 6px;
+  font: 700 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.95); will-change: transform; }
+.fuelMark i { display: block; width: 12px; height: 12px; border: 2px solid currentColor; rotate: 45deg; box-shadow: 0 0 12px currentColor; }
+.fuelMark.off i { width: 0; height: 0; border: 9px solid transparent; border-bottom: 15px solid currentColor; border-top-width: 0; rotate: 0deg; box-shadow: none; }
+.fuelMark span { padding: 4px 7px 3px; background: rgba(9, 11, 15, 0.55); border: 1px solid currentColor; border-radius: 2px; }
+.fuelMark[data-id="nitrogen"] { color: #7fd8ff; }
+.fuelMark[data-id="combustion"] { color: #ff8a3a; }
+.fuelMark[data-id="rocket"] { color: #ffd68a; }
+#fuelChips { display: flex; gap: 6px; align-items: center; font: 700 10px/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; }
+#fuelChips i { font-style: normal; padding: 3px 6px 2px; border: 1px solid currentColor; border-radius: 2px; background: rgba(9, 11, 15, 0.5); }
+#fuelChips i[data-id="nitrogen"] { color: #7fd8ff; }
+#fuelChips i[data-id="combustion"] { color: #ff8a3a; }
+#fuelChips i[data-id="rocket"] { color: #ffd68a; }
+#fuelChips b { color: var(--paper); font-variant-numeric: tabular-nums; }
+.cluster[data-fuel="nitrogen"] #boostFill { background: #7fd8ff; box-shadow: 0 0 10px #7fd8ff; }
+.cluster[data-fuel="combustion"] #boostFill { background: linear-gradient(90deg, #ff5a1f, #ffb04a); box-shadow: 0 0 10px #ff8a3a; }
+.cluster[data-fuel="rocket"] #boostFill { background: linear-gradient(90deg, #ff7a2a, #ffe9b8); box-shadow: 0 0 12px #ffd68a; }
+
+#hull {
+  position: absolute; left: max(18px, env(safe-area-inset-left, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 6px; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+#hull .bar { width: 220px; height: 8px; border: 1px solid var(--line); }
+#hullFill { background: var(--ok); transition: background 0.4s; }
+#hull[data-s="scraped"] #hullFill { background: #d8e07a; }
+#hull[data-s="damaged"] #hullFill { background: #f0a850; }
+#hull[data-s="critical"] #hullFill { background: var(--signal); animation: throb 0.6s infinite alternate; }
+#hull[data-s="fire"] #hullFill { background: #ff6a2a; animation: throb 0.25s infinite alternate; }
+@keyframes throb { from { opacity: 0.55; } to { opacity: 1; } }
+#hullLabel { font: 700 12px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; gap: 12px; }
+#hullLabel b { color: var(--paper); font-variant-numeric: tabular-nums; }
+#hullState { color: var(--ok); }
+#hull[data-s="scraped"] #hullState { color: #d8e07a; }
+#hull[data-s="damaged"] #hullState { color: #f0a850; }
+#hull[data-s="critical"] #hullState, #hull[data-s="fire"] #hullState { color: var(--signal); }
+#hint { max-width: min(34vw, 380px); font-size: 11px; line-height: 1.5; color: rgba(238, 241, 244, 0.6); }
+
+#altBox {
+  position: absolute; right: max(22px, env(safe-area-inset-right, 0px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 14px; opacity: 0; transition: opacity 0.3s;
+}
+#altBox.on { opacity: 1; }
+#altBox svg { width: 26px; height: 46px; }
+.alt-ring { width: 88px; height: 88px; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 50%; display: grid; place-content: center; text-align: center; }
+.alt-ring small { font: 600 9px/1 var(--body); letter-spacing: 0.2em; color: var(--dim); }
+#altVal { font: 700 28px/1 var(--display); font-variant-numeric: tabular-nums; }
+
+#toast {
+  position: absolute; top: 22%; left: 50%; translate: -50% 0; font: 800 30px/1 var(--display);
+  letter-spacing: 0.24em; text-transform: uppercase; opacity: 0; transition: opacity 0.25s, transform 0.25s; text-align: center;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.8); max-width: calc(100vw - 32px); transform: scale(0.9);
+}
+#toast.show { opacity: 1; transform: scale(1); }
+#toast small { display: block; font: 500 13px/1.4 var(--body); letter-spacing: 0.08em; text-transform: none; color: var(--dim); margin-top: 8px; }
+
+/* combo panel: multiplier, running total, the chain so far, and the grace bar on the ground */
+#combo {
+  position: absolute; top: calc(70px + env(safe-area-inset-top, 0px)); left: 50%; translate: -50% 0;
+  min-width: 240px; max-width: min(520px, calc(100vw - 32px)); text-align: center; display: grid; gap: 6px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+}
+#combo.pop .combo-head b { animation: comboPop 0.35s ease-out; }
+@keyframes comboPop { 0% { transform: scale(1.5); color: #fff; } 100% { transform: scale(1); } }
+.combo-head { display: flex; justify-content: center; align-items: baseline; gap: 14px; }
+.combo-head b { font: 800 44px/1 var(--display); color: var(--gold); display: inline-block; }
+.combo-head span { font: 700 20px/1 var(--display); letter-spacing: 0.1em; color: var(--paper); font-variant-numeric: tabular-nums; }
+#comboMoves { font: 600 12px/1.4 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: #d7dde4; }
+.combo-bar { width: 180px; height: 3px; margin: 0 auto; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.combo-bar i { display: block; height: 100%; background: var(--gold); transform-origin: left center; }
+#scoreChip { color: var(--dim); }
+
+/* scoreboard: hold LB / Tab */
+#board {
+  position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: min(420px, calc(100vw - 32px));
+  background: var(--glass); border: 1px solid var(--line); border-radius: 2px; padding: 18px 22px; display: grid; gap: 10px;
+}
+#board h3 { margin: 0; font: 800 26px/1 var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+.board-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; font-size: 13px; color: var(--dim); }
+.board-grid b { color: var(--paper); font-variant-numeric: tabular-nums; text-align: right; }
+#boardMoves { margin: 0; font-size: 11px; line-height: 1.5; color: #c9d0d8; }
+#scoreChip b { color: var(--paper); font-variant-numeric: tabular-nums; }
+
+#demo {
+  position: absolute; right: max(18px, env(safe-area-inset-right, 0px)); top: calc(18px + env(safe-area-inset-top, 0px));
+  width: 280px; background: var(--glass); border: 1px solid var(--line); border-radius: 2px; padding: 12px 14px; display: grid; gap: 6px;
+}
+#demo h3 { margin: 0 0 4px; font: 700 12px/1 var(--display); letter-spacing: 0.24em; text-transform: uppercase; color: var(--gold); }
+#demo div { display: grid; grid-template-columns: 18px 1fr; gap: 8px; font-size: 12px; color: #d7dde4; align-items: start; }
+#demo div small { color: var(--dim); display: block; font-size: 11px; line-height: 1.35; }
+#demo div i { width: 12px; height: 12px; border: 1px solid var(--dim); border-radius: 2px; margin-top: 3px; display: block; }
+#demo div.done i { background: var(--ok); border-color: var(--ok); }
+#demo div.done { color: var(--ok); }
+#demo div.done small { display: none; }
+
+#dead {
+  position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 10px;
+  background: radial-gradient(ellipse at center, rgba(40, 6, 4, 0.2), rgba(5, 6, 9, 0.75)); opacity: 0; transition: opacity 0.4s;
+}
+#dead.show { opacity: 1; }
+#dead h2 { margin: 0; font: 800 clamp(48px, 10vw, 110px)/0.9 var(--display); letter-spacing: 0.1em; color: var(--signal); text-transform: uppercase; }
+#dead p { margin: 0; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 13px; }
+
+#pause .card { width: min(440px, 100%); }
+#pause h2 { margin: 0; font: 800 44px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+#pause .stack { display: grid; gap: 10px; }
+
+/* Photoreal Chicago: the key field in the pause menu, and Google's logo + data credits along the
+   bottom edge while the layer is on (the HUD steps up to make room; nothing overlaps the logo) */
+.keyrow { display: grid; gap: 8px; padding: 2px 0 4px; }
+.keyrow label { font: 600 11px/1.3 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.keyrow .row { flex-wrap: nowrap; gap: 8px; }
+.keyrow .row button { flex: none; padding: 12px 14px; }
+#photoKey {
+  flex: 1; min-width: 0; font: 500 14px/1 var(--body); letter-spacing: 0.04em; color: var(--paper);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 2px; padding: 12px;
+}
+#photoKey::placeholder { color: #6f7884; }
+#photoKey:focus-visible { outline: 2px solid var(--vapor); outline-offset: 2px; }
+#photoNote[data-s="error"], #photoNote[data-s="blocked"] { color: #f0a850; }
+#photoNote[data-s="on"] { color: var(--ok); }
+#gattr {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; pointer-events: none;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(5px + env(safe-area-inset-bottom, 0px));
+}
+#gattr img { display: block; height: 18px; width: auto; margin-top: 10px; flex: none; }
+#gattrText {
+  min-width: 0; max-width: 64vw; text-align: right; font: 500 11px/1.35 var(--body); color: rgba(238, 241, 244, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.6);
+}
+body.photoreal #hull, body.photoreal .cluster { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+body.photoreal #altBox { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+body.photoreal .overlay { padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 820px) {
+  #hint, #demo { display: none; }
+  #speed { font-size: 56px; }
+  .alt-ring { width: 70px; height: 70px; }
+  #hull .bar { width: 150px; }
+  .maps { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #altBox, #toast, #dead { transition: none; }
+  #hullFill { animation: none !important; }
+}
+</style>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+  "3d-tiles-renderer": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.3/build/index.js",
+  "3d-tiles-renderer/plugins": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.3/build/index.plugins.js"
+} }
+</script>
+</head>
+<body>
+
+<canvas id="view" tabindex="0" aria-label="Game view"></canvas>
+
+<section id="title" class="overlay">
+  <div class="card">
+    <p class="eyebrow">Unofficial fan game · v1 · build 3.9</p>
+    <h1>Skyster<span>Rocket League rules</span></h1>
+    <p class="lede">The second-generation Tesla Roadster, modelled from the 15 October 2026 reveal, with Rocket League's car physics scaled to a real 2,825 mm wheelbase: RL's throttle, boost and brake curves, jump, double jump, dodge flips with flip cancel, air roll, wall riding on the fans' suction, a three-second boost tank, and 33 boost on every spawn.</p>
+    <div class="maps" role="radiogroup" aria-label="Map">
+      <button class="ghost" id="mapChicago" aria-pressed="true"><b>Downtown Chicago</b><small>17,588 buildings with lidar-measured heights across 6 × 6 km: the Loop, River North, Navy Pier, the lakefront, the L, the river. Traffic of Model 3s, Model Ys, Cybertrucks, Cybercabs, Robovans and Semis on the real signals, people and Optimus on the sidewalks. PSI tokens on the streets, Superchargers to repair, and three fuel add-ons to find under coloured light beams.</small></button>
+      <button class="ghost" id="mapArena" aria-pressed="false"><b>McGregor demo</b><small>The reveal site at night: the curved wall, the lineup of Teslas, the 0–60 strip. Six stunts to land.</small></button>
+    </div>
+    <div class="row">
+      <button id="startBtn" disabled>Loading…</button>
+      <span class="status" id="loadStatus">Starting…</span>
+    </div>
+    <div class="controls">
+      <table>
+        <thead><tr><th>Action</th><th>Xbox controller</th><th>Keyboard · mouse</th></tr></thead>
+        <tbody>
+          <tr><td>Throttle / reverse</td><td><kbd>RT</kbd> <kbd>LT</kbd></td><td><kbd>W</kbd> <kbd>S</kbd></td></tr>
+          <tr><td>Steer · air yaw</td><td>Left stick</td><td><kbd>A</kbd> <kbd>D</kbd></td></tr>
+          <tr><td>Air pitch (nose up / down)</td><td>Left stick back / forward; if that axis stops reporting, D-pad ↓ / ↑ and the right stick take over</td><td><kbd>W</kbd> nose down · <kbd>S</kbd> nose up</td></tr>
+          <tr><td>Jump · double jump · dodge (the flip is kept, untimed, after driving off a wall or ramp)</td><td><kbd>A</kbd> (stick + A to flip)</td><td>Right mouse (+ W/S/A/D to flip)</td></tr>
+          <tr><td>Boost (cold-gas thrusters)</td><td><kbd>B</kbd></td><td>Left mouse</td></tr>
+          <tr><td>Powerslide · air roll (hold + steer)</td><td><kbd>X</kbd></td><td><kbd>Shift</kbd></td></tr>
+          <tr><td>Air roll left / right (let go and the car banks back to wheels-down; pause menu turns that off)</td><td>hold <kbd>X</kbd> + stick · <kbd>RB</kbd> rolls right</td><td><kbd>Q</kbd> <kbd>E</kbd></td></tr>
+          <tr><td>Hover (after both jumps: let go, then hold)</td><td>hold <kbd>A</kbd></td><td>hold right mouse</td></tr>
+          <tr><td>Camera (chase · far · cockpit · bumper) · rear view (hold) · scoreboard (hold)</td><td><kbd>Y</kbd> · click right stick · pause menu puts rear view and scoreboard on <kbd>RB</kbd> <kbd>LB</kbd></td><td><kbd>Space</kbd> · <kbd>C</kbd> · <kbd>Tab</kbd></td></tr>
+          <tr><td>Kickflip · parallel park (in the air: backflip · side flip)</td><td>D-pad ↑ · ↓</td><td><kbd>1</kbd> · <kbd>2</kbd></td></tr>
+          <tr><td>Flight mode (hold, in the air): wheels level, stick turns and climbs, RT thrust, LT air brake; uses the tank, which fuel add-ons stretch</td><td>hold <kbd>LB</kbd></td><td>hold <kbd>F</kbd></td></tr>
+          <tr><td>Landing protocol (hold): wheels down, nose along the travel, thrusters brake the fall</td><td>hold <kbd>LT</kbd> in the air (D-pad ← engages it until touchdown)</td><td>hold <kbd>L</kbd> (<kbd>3</kbd> engages it)</td></tr>
+          <tr><td>Wall launch (from a wall)</td><td>D-pad ←</td><td><kbd>3</kbd></td></tr>
+          <tr><td>Headlights · doors</td><td>D-pad ← · →</td><td><kbd>H</kbd> · <kbd>G</kbd></td></tr>
+          <tr><td>Respawn · pause</td><td>View · Menu</td><td><kbd>R</kbd> · <kbd>Esc</kbd></td></tr>
+          <tr id="claudeRow"><td>Send the last 90 s to Claude (when something feels wrong)</td><td>Menu → Send</td><td><kbd>F9</kbd></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fine">Combos: every full roll, flip or 360, wall ride, wall touch (flip reset), wave dash and hover extends the chain and the multiplier; land on flat ground for half a second to bank it, crash and it's gone. Controller layout is Rocket League's default. The keyboard uses Rocket League's mouse defaults; switch to a classic Space / Shift layout in the pause menu. Click the view to capture the mouse. Map data © OpenStreetMap contributors (ODbL) and the Overture Maps Foundation; building heights from USGS 3DEP lidar. Not affiliated with or endorsed by Tesla, Inc.</p>
+  </div>
+</section>
+
+<section id="hud" hidden>
+  <div class="chips">
+    <span class="chip" id="surfChip" data-k="ground">Road</span>
+    <span class="chip" id="todChip">Golden hour</span>
+    <span class="chip" id="sixtyChip" hidden>0–60 <b>—</b></span>
+    <span class="chip" id="sonic">Supersonic</span>
+    <span class="chip" id="scoreChip">Score <b id="scoreVal">0</b> · best <b id="bestVal">×0</b></span>
+  </div>
+  <div id="toast"></div>
+  <div id="combo" hidden>
+    <div class="combo-head"><b id="comboMult">×1</b><span id="comboScore">0</span></div>
+    <div id="comboMoves"></div>
+    <div class="combo-bar"><i id="comboBar"></i></div>
+  </div>
+  <div class="cluster">
+    <div id="speed">0</div>
+    <div class="unit">MPH</div>
+    <div class="bar"><div id="boostFill"></div></div>
+    <div class="bar-label"><span>TANK <span id="psi">10,000</span> PSI</span><span class="jumps" aria-label="Jumps"><i id="j1"></i><i id="j2"></i></span></div>
+    <div id="fuelChips" hidden></div>
+  </div>
+  <div id="hull" data-s="ok">
+    <div id="hint"></div>
+    <div id="hullLabel"><span>Hull <b id="hullPct">100</b>%</span><span id="hullState">Nominal</span></div>
+    <div class="bar"><div id="hullFill"></div></div>
+  </div>
+  <div id="altBox">
+    <svg viewBox="0 0 26 46" aria-hidden="true"><path d="M13 1 L22 9 L24 36 L19 45 L7 45 L2 36 L4 9 Z" fill="none" stroke="#eef1f4" stroke-width="1.6"/><path d="M8 14 L18 14 L19 30 L7 30 Z" fill="#eef1f4" opacity=".35"/></svg>
+    <div class="alt-ring"><small>ALTITUDE</small><span id="altVal">0.0</span><small>FT</small></div>
+  </div>
+  <div id="demo" hidden>
+    <h3>The McGregor show</h3>
+    <div data-k="wall"><i></i><span>Wall ride · inverted hold<small>Hit the curved wall straight at about 80 mph. Once you are past vertical, hold the brake: the fans keep you hanging upside down.</small></span></div>
+    <div data-k="launch"><i></i><span>Wall launch · barrel roll<small>Jump off the wall (A / right mouse), air roll (X + stick, or LB/RB) a full turn, land on the wheels.</small></span></div>
+    <div data-k="kickflip"><i></i><span>Kickflip<small>Jump, then stick back + jump for a backflip. Or press D-pad ↑ / key 1.</small></span></div>
+    <div data-k="parallel"><i></i><span>Parallel park<small>Hop, roll once, land one car-width over. D-pad ↓ / key 2 does it for you.</small></span></div>
+    <div data-k="lineup"><i></i><span>Hover over the lineup<small>Use both jumps, let go of jump, then hold it to fire all six floor thrusters. Clear the five Teslas at right.</small></span></div>
+    <div data-k="sixty"><i></i><span>0–60 under a second<small>From a standstill on the strip: throttle and boost together.</small></span></div>
+  </div>
+  <div id="dead"><h2>Totaled</h2><p id="deadSub">Thrusters offline · respawning</p></div>
+  <div id="board" hidden>
+    <h3>Scoreboard</h3>
+    <div class="board-grid">
+      <span>Score</span><b id="boardScore">0</b>
+      <span>Best combo</span><b id="boardBest">×0</b>
+      <span>Top speed</span><b id="boardTop">0 mph</b>
+      <span>Best 0–60</span><b id="boardSixty">—</b>
+      <span>Controller</span><b id="boardPad">keyboard</b>
+    </div>
+    <p id="boardMoves"></p>
+  </div>
+</section>
+
+<section id="pause" class="overlay" hidden>
+  <div class="card">
+    <p class="eyebrow">Paused</p>
+    <h2>Garage</h2>
+    <div class="stack">
+      <button id="resumeBtn">Resume</button>
+      <button id="fuelBtn" class="ghost">Fuel add-ons: none yet</button>
+      <p class="fine" id="fuelNote"></p>
+      <button id="mapBtn" class="ghost">Map: Downtown Chicago</button>
+      <button id="timeBtn" class="ghost">Time of day: Golden hour</button>
+      <button id="photoBtn" class="ghost" aria-pressed="false">Photoreal Chicago (Google): off</button>
+      <div class="keyrow">
+        <label for="photoKey">Your Google Maps Platform API key (Map Tiles API)</label>
+        <div class="row">
+          <input id="photoKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste key (AIza…)">
+          <button id="photoKeySave" class="ghost">Save</button>
+          <button id="photoKeyForget" class="ghost">Forget</button>
+        </div>
+        <p class="fine" id="photoNote">Streams Google's photorealistic 3D city. Collisions keep using the open-data footprints.</p>
+      </div>
+      <button id="layoutBtn" class="ghost">Keyboard: Rocket League (mouse jump/boost)</button>
+      <button id="soundBtn" class="ghost">Sound: on</button>
+      <button id="rollAssistBtn" class="ghost">Roll assist: on (let go of air roll and the wheels come down)</button>
+      <button id="pitchBtn" class="ghost">Air pitch: left stick (right stick fills in if the left glitches)</button>
+      <button id="bumpersBtn" class="ghost">Bumpers: LB flight mode (hold, in the air) · RB air roll right</button>
+      <button id="hidBtn" class="ghost">Read the left stick straight from the controller (experimental)</button>
+      <button id="calBtn" class="ghost">Recalibrate controller (let go of the sticks)</button>
+      <button id="replayBtn" class="ghost">Send last 90 s to Claude (F9)</button>
+      <button id="fullBtn" class="ghost">Full screen</button>
+    </div>
+    <p class="fine" id="padMon">Controller: none seen yet · press a button on it</p>
+    <p class="fine">D-pad or arrow keys to move, A or Enter to choose, Menu or Esc to resume. Move the sticks while paused to see what the game receives.</p>
+  </div>
+</section>
+
+<div id="gattr" hidden><img id="gattrLogo" alt="Google Maps" width="86" height="18"><span id="gattrText"></span></div>
+
+<script type="module" src="js/main.js?v=3.9"></script>
+
+</body>
+</html>
